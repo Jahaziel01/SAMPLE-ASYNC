@@ -10,58 +10,38 @@ app.use(express.json());
 const API_PORT = 5000;
 const API_URL = 'http://localhost:' + API_PORT;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 app.get('/checkUpdates', (req, res) => {
-  exec(`cd ${__dirname} && git fetch origin`, (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+  try {
+    const projectPath = path.resolve();
 
-    exec(`cd ${__dirname} && git rev-parse --abbrev-ref HEAD`, (err, branchStdout) => {
-      if (err) return res.status(500).json({ error: err.message });
+    // Obtener rama actual
+    const branch = execSync(`git rev-parse --abbrev-ref HEAD`, { cwd: projectPath })
+      .toString().trim();
 
-      const branch = branchStdout.trim();
+    // Forzar sincronización con remoto
+    execSync(`git fetch origin`, { cwd: projectPath });
+    execSync(`git reset --hard origin/${branch}`, { cwd: projectPath });
 
-      exec(`cd ${__dirname} && git reset --hard origin/${branch}`, (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+    // Ver si cambió package.json o package-lock.json
+    const diff = execSync(`git diff --name-only HEAD@{1} HEAD`, { cwd: projectPath })
+      .toString().split('\n');
+    const changedPackages = diff.includes('package.json') || diff.includes('package-lock.json');
 
-        exec(`cd ${__dirname} && git ls-files -m`, (err, modifiedStdout) => {
-          if (err) return res.status(500).json({ error: err.message });
+    if (changedPackages) {
+      execSync(`npm install`, { cwd: projectPath });
+    }
 
-          const filesChanged = modifiedStdout.trim().split('\n').filter(f => f);
+    // Reiniciar PM2 sin abrir CMD extra
+    execSync(`pm2 restart sample --update-env`, { cwd: projectPath });
 
-          exec(`cd ${__dirname} && git ls-files --others --exclude-standard`, (err, untrackedStdout) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            const untrackedFiles = untrackedStdout.trim().split('\n').filter(f => f);
-
-            const allChangedFiles = [...new Set([...filesChanged, ...untrackedFiles])];
-
-            // Actualizar archivos (checkout no necesario porque hicimos reset hard)
-            const changedPackages = allChangedFiles.includes('package.json') || allChangedFiles.includes('package-lock.json');
-            const npmCmd = changedPackages ? 'npm install && ' : '';
-
-            const pm2ProcessName = 'sample'; // Cambia por tu proceso PM2 real
-            const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
-
-           exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
-             console.log('Salida PM2 restart:', stdout);
-              if (err) {
-                return res.status(500).json({ error: stderr || err.message });
-              }
-
-              res.json({
-                updated: true,
-                message: 'Archivos actualizados y app reiniciada.',
-                filesChanged: allChangedFiles
-              });
-            });
-
-          });
-        });
-      });
+    res.json({
+      updated: true,
+      message: 'Código sincronizado y servidor reiniciado.',
+      filesChanged: diff.filter(Boolean)
     });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/data', async (req, res) => {
