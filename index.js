@@ -31,13 +31,15 @@ app.get('/checkUpdates', (req, res) => {
     if (changedPackages) {
       execSync(`npm install`, { cwd: projectPath });
     }
-    // Reiniciar PM2 sin abrir CMD extra
-    execSync(`pm2 restart sample --update-env`, { cwd: projectPath });
 
+    execSync(`pm2 restart sample --update-env`, { cwd: projectPath });
+    
     res.json({
       updated: true,
       message: 'Updated to commit ' + lastCommitId,
     });
+    // Reiniciar PM2 sin abrir CMD extra
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
