@@ -35,8 +35,6 @@ app.get('/checkUpdates', (req, res) => {
 
         exec(`cd ${projectPath} && ${pm2Cmd}`, (err, stdout, stderr) => {
           if (err) {
-            console.error('Error reiniciando PM2:', err);
-            console.error('stderr:', stderr);
             return res.status(500).json({ error: stderr || err.message });
           }
           console.log('pm2 restart output:', stdout);
