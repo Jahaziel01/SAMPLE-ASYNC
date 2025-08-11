@@ -17,33 +17,51 @@ app.get('/checkUpdates', (req, res) => {
   exec(`cd ${__dirname} && git fetch origin`, (err) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    exec(`cd ${__dirname} && git diff --name-only HEAD origin/main`, (err, stdout) => {
+    // Obtener rama actual
+    exec(`cd ${__dirname} && git rev-parse --abbrev-ref HEAD`, (err, branchStdout) => {
       if (err) return res.status(500).json({ error: err.message });
 
-      const filesChanged = stdout.trim().split('\n').filter(f => f);
+      const branch = branchStdout.trim();
 
-      if (filesChanged.length === 0) {
-        return res.json({ updated: false, message: 'No hay cambios en archivos.' });
-      }
-
-      let commands = filesChanged.map(f => `git checkout origin/main -- "${f}"`).join(' && ');
-      exec(`cd ${__dirname} && ${commands}`, (err) => {
+      // Forzar reset hard a remoto para sincronizar TODO
+      exec(`cd ${__dirname} && git reset --hard origin/${branch}`, (err) => {
         if (err) return res.status(500).json({ error: err.message });
 
-        const changedPackages = filesChanged.includes('package.json') || filesChanged.includes('package-lock.json');
-        const npmCmd = changedPackages ? 'npm install && ' : '';
+        // Verificar archivos modificados (por si hay cambios no trackeados)
+        exec(`cd ${__dirname} && git ls-files -m`, (err, modifiedStdout) => {
+          if (err) return res.status(500).json({ error: err.message });
 
-        const pm2ProcessName = 'sample'; // Cambia aquí al nombre correcto según pm2 list
-        const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
+          const filesChanged = modifiedStdout.trim().split('\n').filter(f => f);
 
-        exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
-          if (err) {
-            return res.status(500).json({ error: stderr || err.message });
-          }
-          res.json({
-            updated: true,
-            message: 'Archivos actualizados y app reiniciada.',
-            filesChanged
+          // También incluir archivos no trackeados
+          exec(`cd ${__dirname} && git ls-files --others --exclude-standard`, (err, untrackedStdout) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const untrackedFiles = untrackedStdout.trim().split('\n').filter(f => f);
+
+            const allChangedFiles = [...new Set([...filesChanged, ...untrackedFiles])];
+
+            if (allChangedFiles.length === 0) {
+              return res.json({ updated: false, message: 'No hay cambios en archivos.' });
+            }
+
+            // Actualizar archivos (checkout no necesario porque hicimos reset hard)
+            const changedPackages = allChangedFiles.includes('package.json') || allChangedFiles.includes('package-lock.json');
+            const npmCmd = changedPackages ? 'npm install && ' : '';
+
+            const pm2ProcessName = 'sample'; // Cambia por tu proceso PM2 real
+            const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
+
+            exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
+              if (err) {
+                return res.status(500).json({ error: stderr || err.message });
+              }
+              res.json({
+                updated: true,
+                message: 'Archivos actualizados y app reiniciada.',
+                filesChanged: allChangedFiles
+              });
+            });
           });
         });
       });
