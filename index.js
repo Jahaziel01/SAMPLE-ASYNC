@@ -14,16 +14,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.get('/checkUpdates', (req, res) => {
-  const branch = 'main'; // O la rama que uses
   const pm2ProcessName = 'sample'; // Cambia al nombre real de tu proceso PM2
 
-  // Comando: traer cambios, forzar igualar a remoto y reiniciar
   const cmd = `
     cd "${__dirname}" &&
     git fetch origin &&
-    git reset --hard origin/${branch} &&
-    if git diff --name-only HEAD@{1} HEAD | grep -q "package.json\\|package-lock.json"; then npm install; fi &&
-    pm2 restart ${pm2ProcessName} --update-env
+    git reset --hard origin/main &&
+    git diff --name-only HEAD@{1} HEAD
   `;
 
   exec(cmd, (err, stdout, stderr) => {
@@ -32,10 +29,31 @@ app.get('/checkUpdates', (req, res) => {
       return res.status(500).json({ error: stderr || err.message });
     }
 
-    console.log('Salida actualización:', stdout);
-    res.json({
-      updated: true,
-      message: 'Código sincronizado con la nube y servidor reiniciado.'
+    const changedFiles = stdout
+      .split('\n')
+      .map(f => f.trim())
+      .filter(Boolean);
+
+    console.log('Archivos modificados:', changedFiles);
+
+    // Si hay cambios en dependencias, instalar
+    const npmCmd = changedFiles.some(f => ['package.json', 'package-lock.json'].includes(f))
+      ? 'npm install && '
+      : '';
+
+    // Reiniciar PM2
+    exec(`cd "${__dirname}" && ${npmCmd}pm2 restart ${pm2ProcessName} --update-env`, (pm2Err, pm2Out, pm2ErrOut) => {
+      if (pm2Err) {
+        console.error('Error reiniciando PM2:', pm2ErrOut || pm2Err.message);
+        return res.status(500).json({ error: pm2ErrOut || pm2Err.message });
+      }
+
+      console.log('PM2 restart output:', pm2Out);
+      res.json({
+        updated: true,
+        message: 'Código sincronizado con la nube y servidor reiniciado.',
+        filesChanged: changedFiles
+      });
     });
   });
 });
