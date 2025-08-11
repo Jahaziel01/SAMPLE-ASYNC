@@ -2,6 +2,9 @@ import path from 'path';
 import express from 'express';
 import getData from './fetch.js';
 import { execSync } from 'child_process';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
@@ -26,11 +29,18 @@ app.get('/checkUpdates', (req, res) => {
       .toString().split('\n');
     const changedPackages = diff.includes('package.json') || diff.includes('package-lock.json');
 
-    const lastCommitId = execSync('git rev-parse --short HEAD').toString().trim();
-
     if (changedPackages) {
       execSync(`npm install`, { cwd: projectPath });
     }
+
+    const restart = spawn('pm2', ['restart', process.env.PM2_PROCESS_NAME, '--update-env'], {
+      cwd: projectPath,
+      detached: true,
+      stdio: 'ignore',
+    });
+    restart.unref();
+
+    const lastCommitId = execSync('git rev-parse --short HEAD').toString().trim();
     
     res.json({
       updated: true,
