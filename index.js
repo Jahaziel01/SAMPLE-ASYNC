@@ -1,8 +1,7 @@
 import path from 'path';
-import { fileURLToPath } from 'url';
 import express from 'express';
 import getData from './fetch.js';
-import { exec } from 'child_process';
+import { execSync } from 'child_process';
 
 const app = express();
 app.use(express.json());
@@ -27,17 +26,17 @@ app.get('/checkUpdates', (req, res) => {
       .toString().split('\n');
     const changedPackages = diff.includes('package.json') || diff.includes('package-lock.json');
 
+    const lastCommitId = execSync('git rev-parse --short HEAD').toString().trim();
+
     if (changedPackages) {
       execSync(`npm install`, { cwd: projectPath });
     }
-
     // Reiniciar PM2 sin abrir CMD extra
     execSync(`pm2 restart sample --update-env`, { cwd: projectPath });
 
     res.json({
       updated: true,
-      message: 'Código sincronizado y servidor reiniciado.',
-      filesChanged: diff.filter(Boolean)
+      message: 'Updated to commit ' + lastCommitId,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
