@@ -11,11 +11,9 @@ const API_URL = 'http://localhost:' + API_PORT;
 const projectPath = '/Users/jahaz/Escritorio/Project Sample';
 
 app.get('/checkUpdates', (req, res) => {
-  // 1. Fetch remoto
   exec(`cd ${projectPath} && git fetch origin`, (err) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    // 2. Obtener lista de archivos modificados entre local y remoto
     exec(`cd ${projectPath} && git diff --name-only origin/main`, (err, stdout) => {
       if (err) return res.status(500).json({ error: err.message });
 
@@ -25,26 +23,27 @@ app.get('/checkUpdates', (req, res) => {
         return res.json({ updated: false, message: 'No hay cambios en archivos.' });
       }
 
-      // 3. Actualizar cada archivo modificado desde remoto
       let commands = filesChanged.map(f => `git checkout origin/main -- "${f}"`).join(' && ');
-
-      // 4. Ejecutar comandos para actualizar archivos
       exec(`cd ${projectPath} && ${commands}`, (err) => {
         if (err) return res.status(500).json({ error: err.message });
 
-        // 5. Si cambió package.json, actualizar dependencias
         const changedPackages = filesChanged.includes('package.json') || filesChanged.includes('package-lock.json');
-
         const npmCmd = changedPackages ? 'npm install && ' : '';
 
-        // 6. Reiniciar app
-        exec(`cd ${projectPath} && ${npmCmd}pm2 restart sample`, (err) => {
-          if (err) return res.status(500).json({ error: err.message });
+        const pm2ProcessName = 'sample'; // Cambia aquí al nombre correcto según pm2 list
+        const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
 
-          res.json({ 
-            updated: true, 
-            message: 'Archivos actualizados y app reiniciada.', 
-            filesChanged 
+        exec(`cd ${projectPath} && ${pm2Cmd}`, (err, stdout, stderr) => {
+          if (err) {
+            console.error('Error reiniciando PM2:', err);
+            console.error('stderr:', stderr);
+            return res.status(500).json({ error: stderr || err.message });
+          }
+          console.log('pm2 restart output:', stdout);
+          res.json({
+            updated: true,
+            message: 'Archivos actualizados y app reiniciada.',
+            filesChanged
           });
         });
       });
