@@ -14,45 +14,51 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.get('/checkUpdates', (req, res) => {
-  const pm2ProcessName = 'sample'; // Cambia al nombre real de tu proceso PM2
+  exec(`cd ${__dirname} && git fetch origin`, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
 
-  const cmd = `
-    cd "${__dirname}" &&
-    git fetch origin &&
-    git reset --hard origin/main &&
-    git diff --name-only HEAD@{1} HEAD
-  `;
+    exec(`cd ${__dirname} && git rev-parse --abbrev-ref HEAD`, (err, branchStdout) => {
+      if (err) return res.status(500).json({ error: err.message });
 
-  exec(cmd, (err, stdout, stderr) => {
-    if (err) {
-      console.error('Error actualizando:', stderr || err.message);
-      return res.status(500).json({ error: stderr || err.message });
-    }
+      const branch = branchStdout.trim();
 
-    const changedFiles = stdout
-      .split('\n')
-      .map(f => f.trim())
-      .filter(Boolean);
+      exec(`cd ${__dirname} && git reset --hard origin/${branch}`, (err) => {
+        if (err) return res.status(500).json({ error: err.message });
 
-    console.log('Archivos modificados:', changedFiles);
+        exec(`cd ${__dirname} && git ls-files -m`, (err, modifiedStdout) => {
+          if (err) return res.status(500).json({ error: err.message });
 
-    // Si hay cambios en dependencias, instalar
-    const npmCmd = changedFiles.some(f => ['package.json', 'package-lock.json'].includes(f))
-      ? 'npm install && '
-      : '';
+          const filesChanged = modifiedStdout.trim().split('\n').filter(f => f);
 
-    // Reiniciar PM2
-    exec(`cd "${__dirname}" && ${npmCmd}pm2 restart ${pm2ProcessName} --update-env`, (pm2Err, pm2Out, pm2ErrOut) => {
-      if (pm2Err) {
-        console.error('Error reiniciando PM2:', pm2ErrOut || pm2Err.message);
-        return res.status(500).json({ error: pm2ErrOut || pm2Err.message });
-      }
+          exec(`cd ${__dirname} && git ls-files --others --exclude-standard`, (err, untrackedStdout) => {
+            if (err) return res.status(500).json({ error: err.message });
 
-      console.log('PM2 restart output:', pm2Out);
-      res.json({
-        updated: true,
-        message: 'Código sincronizado con la nube y servidor reiniciado.',
-        filesChanged: changedFiles
+            const untrackedFiles = untrackedStdout.trim().split('\n').filter(f => f);
+
+            const allChangedFiles = [...new Set([...filesChanged, ...untrackedFiles])];
+
+            // Actualizar archivos (checkout no necesario porque hicimos reset hard)
+            const changedPackages = allChangedFiles.includes('package.json') || allChangedFiles.includes('package-lock.json');
+            const npmCmd = changedPackages ? 'npm install && ' : '';
+
+            const pm2ProcessName = 'sample'; // Cambia por tu proceso PM2 real
+            const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
+
+           exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
+             console.log('Salida PM2 restart:', stdout);
+              if (err) {
+                return res.status(500).json({ error: stderr || err.message });
+              }
+
+              res.json({
+                updated: true,
+                message: 'Archivos actualizados y app reiniciada.',
+                filesChanged: allChangedFiles
+              });
+            });
+
+          });
+        });
       });
     });
   });
