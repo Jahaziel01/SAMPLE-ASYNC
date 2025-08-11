@@ -38,7 +38,7 @@ app.get('/checkUpdates', (req, res) => {
         const npmCmd = changedPackages ? 'npm install && ' : '';
 
         // 6. Reiniciar app
-        exec(`cd ${projectPath} && ${npmCmd}pm2 restart app`, (err) => {
+        exec(`cd ${projectPath} && ${npmCmd}pm2 restart sample`, (err) => {
           if (err) return res.status(500).json({ error: err.message });
 
           res.json({ 
