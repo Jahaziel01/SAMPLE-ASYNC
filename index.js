@@ -2,6 +2,7 @@ import path from 'path';
 import express from 'express';
 import getData from './fetch.js';
 import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
