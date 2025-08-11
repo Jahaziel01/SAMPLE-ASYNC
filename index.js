@@ -17,7 +17,7 @@ app.get('/checkUpdates', (req, res) => {
   exec(`cd ${__dirname} && git fetch origin`, (err) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    exec(`cd ${__dirname} && git diff --name-only origin/main`, (err, stdout) => {
+    exec(`cd ${__dirname} && git diff --name-only HEAD origin/main`, (err, stdout) => {
       if (err) return res.status(500).json({ error: err.message });
 
       const filesChanged = stdout.trim().split('\n').filter(f => f);
