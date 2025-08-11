@@ -31,8 +31,6 @@ app.get('/checkUpdates', (req, res) => {
     if (changedPackages) {
       execSync(`npm install`, { cwd: projectPath });
     }
-
-    execSync(`pm2 restart sample --update-env`, { cwd: projectPath });
     
     res.json({
       updated: true,
