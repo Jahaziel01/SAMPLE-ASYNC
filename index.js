@@ -48,7 +48,7 @@ app.get('/checkUpdates', (req, res) => {
             const pm2ProcessName = 'sample'; // Cambia por tu proceso PM2 real
             const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
 
-            exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
+           const update = exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
               if (err) {
                 return res.status(500).json({ error: stderr || err.message });
               }
@@ -59,10 +59,7 @@ app.get('/checkUpdates', (req, res) => {
               });
             });
 
-            if (allChangedFiles.length === 0) {
-              return res.json({ updated: false, message: 'No hay cambios en archivos.' });
-            }
-            
+            console.log(update);
           });
         });
       });
