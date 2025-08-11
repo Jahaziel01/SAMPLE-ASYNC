@@ -48,10 +48,13 @@ app.get('/checkUpdates', (req, res) => {
             const pm2ProcessName = 'sample'; // Cambia por tu proceso PM2 real
             const pm2Cmd = `${npmCmd}pm2 restart ${pm2ProcessName} --update-env`;
 
-           const update = exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
+           exec(`cd ${__dirname} && ${pm2Cmd}`, (err, stdout, stderr) => {
               if (err) {
                 return res.status(500).json({ error: stderr || err.message });
               }
+
+              console.log('Salida PM2 restart:', stdout);
+
               res.json({
                 updated: true,
                 message: 'Archivos actualizados y app reiniciada.',
@@ -59,7 +62,6 @@ app.get('/checkUpdates', (req, res) => {
               });
             });
 
-            console.log(update);
           });
         });
       });
