@@ -11,23 +11,41 @@ const API_URL = 'http://localhost:' + API_PORT;
 const projectPath = '/Users/jahaz/Escritorio/Project Sample';
 
 app.get('/checkUpdates', (req, res) => {
-  exec(`cd ${projectPath} && git fetch`, (err) => {
+  // 1. Fetch remoto
+  exec(`cd ${projectPath} && git fetch origin`, (err) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    exec(`cd ${projectPath} && git rev-parse HEAD`, (err, localSha) => {
+    // 2. Obtener lista de archivos modificados entre local y remoto
+    exec(`cd ${projectPath} && git diff --name-only origin/main`, (err, stdout) => {
       if (err) return res.status(500).json({ error: err.message });
 
-      exec(`cd ${projectPath} && git rev-parse origin/main`, (err, remoteSha) => {
+      const filesChanged = stdout.trim().split('\n').filter(f => f);
+
+      if (filesChanged.length === 0) {
+        return res.json({ updated: false, message: 'No hay cambios en archivos.' });
+      }
+
+      // 3. Actualizar cada archivo modificado desde remoto
+      let commands = filesChanged.map(f => `git checkout origin/main -- "${f}"`).join(' && ');
+
+      // 4. Ejecutar comandos para actualizar archivos
+      exec(`cd ${projectPath} && ${commands}`, (err) => {
         if (err) return res.status(500).json({ error: err.message });
 
-        if (localSha.trim() === remoteSha.trim()) {
-          return res.json({ updated: false, message: 'No hay cambios.' });
-        }
+        // 5. Si cambió package.json, actualizar dependencias
+        const changedPackages = filesChanged.includes('package.json') || filesChanged.includes('package-lock.json');
 
-        // Solo ejecuta si hay diferencia
-        exec(`cd ${projectPath} && git pull origin main && npm install && pm2 restart app`, (err, stdout, stderr) => {
-          if (err) return res.status(500).json({ error: stderr });
-          res.json({ updated: true, message: 'Actualizado y reiniciado.' });
+        const npmCmd = changedPackages ? 'npm install && ' : '';
+
+        // 6. Reiniciar app
+        exec(`cd ${projectPath} && ${npmCmd}pm2 restart app`, (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          res.json({ 
+            updated: true, 
+            message: 'Archivos actualizados y app reiniciada.', 
+            filesChanged 
+          });
         });
       });
     });
