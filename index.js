@@ -41,10 +41,6 @@ app.get('/checkUpdates', (req, res) => {
 
             const allChangedFiles = [...new Set([...filesChanged, ...untrackedFiles])];
 
-            if (allChangedFiles.length === 0) {
-              return res.json({ updated: false, message: 'No hay cambios en archivos.' });
-            }
-
             // Actualizar archivos (checkout no necesario porque hicimos reset hard)
             const changedPackages = allChangedFiles.includes('package.json') || allChangedFiles.includes('package-lock.json');
             const npmCmd = changedPackages ? 'npm install && ' : '';
@@ -62,6 +58,11 @@ app.get('/checkUpdates', (req, res) => {
                 filesChanged: allChangedFiles
               });
             });
+
+            if (allChangedFiles.length === 0) {
+              return res.json({ updated: false, message: 'No hay cambios en archivos.' });
+            }
+            
           });
         });
       });
