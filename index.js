@@ -8,31 +8,31 @@ app.use(express.json());
 const API_PORT = 5000;
 const API_URL = 'http://localhost:' + API_PORT;
 
+const projectPath = '/Users/jahaz/Escritorio/Project Sample';
+
 app.get('/checkUpdates', (req, res) => {
-    // Ejecutar git fetch para traer los cambios remotos
-    exec('git fetch', (err, stdout, stderr) => {
-      if (err) return res.status(500).json({ error: stderr });
-  
-      // Verificar si hay diferencias entre local y remoto
-      exec('git rev-parse HEAD', (err, localSha) => {
+  exec(`cd ${projectPath} && git fetch`, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    exec(`cd ${projectPath} && git rev-parse HEAD`, (err, localSha) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      exec(`cd ${projectPath} && git rev-parse origin/main`, (err, remoteSha) => {
         if (err) return res.status(500).json({ error: err.message });
-  
-        exec('git rev-parse origin/main', (err, remoteSha) => {
-          if (err) return res.status(500).json({ error: err.message });
-  
-          if (localSha.trim() === remoteSha.trim()) {
-            return res.json({ updated: false, message: 'No hay cambios.' });
-          }
-  
-          // Si son diferentes, hacer git pull + npm install + reinicio
-          exec('git pull origin main && npm install && pm2 restart app', (err, stdout, stderr) => {
-            if (err) return res.status(500).json({ error: stderr });
-            res.json({ updated: true, message: 'Actualizado y reiniciado.' });
-          });
+
+        if (localSha.trim() === remoteSha.trim()) {
+          return res.json({ updated: false, message: 'No hay cambios.' });
+        }
+
+        // Solo ejecuta si hay diferencia
+        exec(`cd ${projectPath} && git pull origin main && npm install && pm2 restart app`, (err, stdout, stderr) => {
+          if (err) return res.status(500).json({ error: stderr });
+          res.json({ updated: true, message: 'Actualizado y reiniciado.' });
         });
       });
     });
   });
+});
 
 app.get('/data', async (req, res) => {
     try {
